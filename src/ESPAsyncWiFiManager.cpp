@@ -973,7 +973,7 @@ void AsyncWiFiManager::handleWifi(AsyncWebServerRequest *request, boolean scan)
     if (wifiSSIDCount == 0)
     {
       DEBUG_WM(F("No networks found"));
-      page += F("<div style='margin-bottom: 10px;'>No networks found. Tap 'Rescan' below.</div>");
+      page += F("<div class='c'>No networks found. Tap 'Rescan' below.</div>");
     }
     else
     {
@@ -1074,12 +1074,12 @@ void AsyncWiFiManager::handleWifi(AsyncWebServerRequest *request, boolean scan)
 
   // --- SECONDARY ACTION BUTTONS / FOOTER LINKS ---
   // Replaces the single HTTP_SCAN_LINK with a neat utility footer
-  page += F("<div style='margin-top: 20px; text-align: center; font-size: 14px; opacity: 0.85;'>");
-  page += F("<a href='/wifi' style='margin: 0 8px;'>Rescan</a> | ");
-  page += F("<a href='/0wifi' style='margin: 0 8px;'>Manual SSID</a> | ");
-  page += F("<a href='/i' style='margin: 0 8px;'>Device Info</a> | ");
-  page += F("<a href='/r' style='margin: 0 8px;' onclick='return confirm(\"Reboot device?\")'>Reset</a>");
-  page += F("</div><br/>");
+  page += F("<div class='links'>");
+  page += F("<a href='/wifi'>Rescan</a> | ");
+  page += F("<a href='/0wifi'>Manual SSID</a> | ");
+  page += F("<a href='/i'>Device Info</a> | ");
+  page += F("<a href='/r' onclick='return confirm(\"Reboot device?\")'>Reset</a>");
+  page += F("</div>");
 
   page += FPSTR(HTTP_END);
 
@@ -1114,34 +1114,27 @@ void AsyncWiFiManager::handleWifiSave(AsyncWebServerRequest *request)
 
   String page = getPageHeader("Connecting Luke...");
 
-  page += F("<div style='text-align:center; padding: 10px;'>");
-  page += F("<h2 style='color:#007aff; margin-bottom:5px;'>Connecting Luke...</h2>");
-  page += F("<p style='margin-top:0;'>Attempting to join <b>");
+  page += F("<div class='c'>");
+  page += F("<h2>Connecting Luke...</h2>");
+  page += F("<p>Attempting to join <b>");
   page += _ssid;
   page += F("</b></p>");
 
-  // Countdown Display & Spinner
-  page += F("<div id='spinner' style='border: 4px solid #f3f3f3; border-top: 4px solid #007aff; border-radius: 50%; width: 36px; height: 36px; animation: spin 1s linear infinite; margin: 15px auto;'></div>");
-  page += F("<style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>");
-  
-  page += F("<div id='timer' style='font-size: 32px; font-weight: bold; color: #007aff; margin: 10px 0;'>30</div>");
-  page += F("<p id='status' style='font-size: 15px; font-weight: bold; color: #555;'>Testing connection...</p>");
+  page += F("<div id='spinner'></div>");
+  page += F("<div id='timer'>30</div>");
+  page += F("<p id='status'>Testing connection...</p>");
 
-  // Fallback Container (Hidden by default)
-  page += F("<div id='fallback' style='display:none; background:#f0f0f5; padding:15px; border-radius:10px; margin:15px 0; text-align:left;'>");
-  page += F("<p id='fallback-title' style='margin:0 0 6px 0; font-weight:bold; color:#d32f2f; font-size:15px;'></p>");
-  page += F("<p id='fallback-desc' style='margin:0 0 12px 0; font-size:13px; color:#444;'></p>");
-  
-  // Re-enter Password Button (Always visible on failure/timeout)
-  page += F("<a id='btn-retry' href='/wifi' style='display:block; text-align:center; background:#007aff; color:white; padding:10px; border-radius:8px; text-decoration:none; font-weight:bold; margin-bottom:5px;'>Re-enter Password</a>");
+  page += F("<div id='fallback'>");
+  page += F("<p id='fallback-title'></p>");
+  page += F("<p id='fallback-desc'></p>");
+  page += F("<a id='btn-retry' class='btn btn-secondary' href='/wifi'>Re-enter Password</a>");
 
-  // Open Luke Controller Section (Shown ONLY if 20s timer times out)
   page += F("<div id='controller-section' style='display:none;'>");
-  page += F("<hr style='border:none; border-top:1px solid #ccc; margin:12px 0;'>");
-  page += F("<p style='margin:0 0 8px 0; font-size:13px; color:#444;'>If Luke connected successfully and your phone joined home Wi-Fi:</p>");
-  page += F("<a href='");
+  page += F("<hr style='border:none; border-top:1px solid #444; margin:12px 0;'>");
+  page += F("<p style='margin:0 0 8px; font-size:13px; color:#ccc;'>If Luke connected successfully and your phone joined home Wi-Fi:</p>");
+  page += F("<a class='btn btn-primary' href='");
   page += redirectUrl;
-  page += F("' style='display:block; text-align:center; background:#34c759; color:white; padding:10px; border-radius:8px; text-decoration:none; font-weight:bold;' target='_blank'>Open Luke Controller</a>");
+  page += F("' target='_blank'>Open Luke Controller</a>");
   page += F("</div>");
 
   page += F("</div>");
@@ -1172,7 +1165,7 @@ void AsyncWiFiManager::handleWifiSave(AsyncWebServerRequest *request)
   page += F("        clearInterval(checkInterval);");
   page += F("        if (spinnerEl) spinnerEl.style.display = 'none';");
   page += F("        if (timerEl) timerEl.style.display = 'none';");
-  page += F("        statusEl.innerHTML = \"<span style='color:#d32f2f; font-size:18px;'>Incorrect Wi-Fi Password!</span>\";");
+  page += F("        statusEl.innerHTML = \"<span class='err'>Incorrect Wi-Fi Password!</span>\";");
   page += F("        titleEl.innerText = 'Authentication Failed';");
   page += F("        descEl.innerText = 'The password entered for ");
   page += _ssid;
@@ -1291,12 +1284,12 @@ void AsyncWiFiManager::handleInfo(AsyncWebServerRequest *request)
     page += F("</dd>");
   }
   page += pager;
-  page += F("<div style='margin-top: 20px; text-align: center; font-size: 14px; opacity: 0.85;'>");
-  page += F("<a href='/wifi' style='margin: 0 8px;'>Rescan</a> | ");
-  page += F("<a href='/0wifi' style='margin: 0 8px;'>Manual SSID</a> | ");
-  page += F("<a href='/i' style='margin: 0 8px;'>Device Info</a> | ");
-  page += F("<a href='/r' style='margin: 0 8px;' onclick='return confirm(\"Reboot device?\")'>Reset</a>");
-  page += F("</div><br/>");
+  page += F("<div class='links'>");
+  page += F("<a href='/wifi'>Rescan</a> | ");
+  page += F("<a href='/0wifi'>Manual SSID</a> | ");
+  page += F("<a href='/i'>Device Info</a> | ");
+  page += F("<a href='/r' onclick='return confirm(\"Reboot device?\")'>Reset</a>");
+  page += F("</div>");
   page += FPSTR(HTTP_END);
 
   request->send(200, "text/html", page);
@@ -1468,9 +1461,9 @@ String AsyncWiFiManager::getPageHeader(const String& pageTitle)
   page += FPSTR(HTTP_HEAD_END);
 
   // Top Title Bar displaying Luke Wi-Fi and Unique Device ID
-  page += F("<div style='text-align:center; margin-bottom:15px;'>");
-  page += F("<h1 style='margin:0; font-size:24px; color:#007aff;'>Luke Wi-Fi</h1>");
-  page += F("<div style='font-size:14px; opacity:0.75; font-weight:bold;'>ID: ");
+  page += F("<div class='c' style='margin-bottom:12px;'>");
+  page += F("<h1>Luke Wi-Fi</h1>");
+  page += F("<div style='font-size:14px; opacity:.75; font-weight:600; color:#ccc;'>ID: ");
   page += (_apName != NULL) ? _apName : "Luke-Device";
   page += F("</div></div>");
 

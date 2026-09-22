@@ -49,7 +49,48 @@ extern "C"
 #endif
 
 const char WFM_HTTP_HEAD[] PROGMEM = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, user-scalable=no\"/><title>{v}</title>";
-const char HTTP_STYLE[] PROGMEM = "<style>.c{text-align: center;} div,input{padding:5px;font-size:1em;} input{width:95%;} body{text-align: center;font-family:verdana;} button{border:0;border-radius:0.3rem;background-color:#1fa3ec;color:#fff;line-height:2.4rem;font-size:1.2rem;width:100%;} .q{float: right;width: 64px;text-align: right;} .l{background: url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAALVBMVEX///8EBwfBwsLw8PAzNjaCg4NTVVUjJiZDRUUUFxdiZGSho6OSk5Pg4eFydHTCjaf3AAAAZElEQVQ4je2NSw7AIAhEBamKn97/uMXEGBvozkWb9C2Zx4xzWykBhFAeYp9gkLyZE0zIMno9n4g19hmdY39scwqVkOXaxph0ZCXQcqxSpgQpONa59wkRDOL93eAXvimwlbPbwwVAegLS1HGfZAAAAABJRU5ErkJggg==\") no-repeat left center;background-size: 1em;}</style>";
+/* Visual language from lukerobotarm.com (src/style.css): dark page, system font, orange actions, blue links. */
+const char HTTP_STYLE[] PROGMEM =
+"<style>"
+":root{font-family:system-ui,'Segoe UI',Avenir,Helvetica,Arial,sans-serif;line-height:1.55;font-weight:400;color-scheme:dark;color:rgba(255,255,255,.9);background:#1a1a1a;font-size:17px;--accent:#ff6600;--accent-hover:#ff8800;--link:#8ab4ff;--border:#444;}"
+"*{box-sizing:border-box;}"
+"body{margin:0;width:100%;min-height:100vh;text-align:center;font-family:inherit;background:#1a1a1a;color:rgba(255,255,255,.9);-webkit-font-smoothing:antialiased;}"
+"a{font-weight:500;color:var(--link);text-decoration:none;}"
+"a:hover{color:#a8c7ff;text-decoration:underline;}"
+"h1,h2{color:var(--accent);line-height:1.15;}"
+"h1{font-size:1.5rem;margin:0;}"
+"h2{font-size:1.35rem;margin:.2rem 0 .6rem;}"
+"p{margin:0 0 .85rem;}"
+"button,input[type=submit]{border-radius:8px;border:1px solid transparent;padding:.6em 1.2em;font-size:1em;font-weight:600;font-family:inherit;background:var(--accent);color:#fff;cursor:pointer;width:100%;line-height:2.4rem;}"
+"button:hover,input[type=submit]:hover{background:var(--accent-hover);}"
+"button:focus,button:focus-visible,input:focus{outline:2px solid var(--accent);outline-offset:2px;}"
+"input{width:95%;padding:.55rem .75rem;border:1px solid var(--border);border-radius:6px;background:#333;color:#fff;font-size:1rem;font-family:inherit;}"
+"input:focus{border-color:var(--accent);}"
+"::placeholder{color:#999;}"
+".c{text-align:center;}"
+"div,input{padding:5px;font-size:1em;}"
+".q{float:right;width:64px;text-align:right;color:#ccc;}"
+".l{background:url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAALVBMVEX///8EBwfBwsLw8PAzNjaCg4NTVVUjJiZDRUUUFxdiZGSho6OSk5Pg4eFydHTCjaf3AAAAZElEQVQ4je2NSw7AIAhEBamKn97/uMXEGBvozkWb9C2Zx4xzWykBhFAeYp9gkLyZE0zIMno9n4g19hmdY39scwqVkOXaxph0ZCXQcqxSpgQpONa59wkRDOL93eAXvimwlbPbwwVAegLS1HGfZAAAAABJRU5ErkJggg==\") no-repeat left center;background-size:1em;filter:invert(1);}"
+".wrap{text-align:left;display:inline-block;min-width:260px;max-width:440px;width:92%;margin:16px auto;background:#242424;border:1px solid #333;border-radius:12px;padding:1.1rem 1.2rem 1.3rem;}"
+".links{margin-top:20px;text-align:center;font-size:14px;opacity:.9;}"
+".links a{margin:0 8px;}"
+"dt{font-weight:600;color:var(--accent);margin-top:.55rem;}"
+"dd{margin:0 0 .35rem 0;color:#ddd;}"
+"#spinner{border:4px solid #444;border-top:4px solid var(--accent);border-radius:50%;width:36px;height:36px;animation:spin 1s linear infinite;margin:15px auto;}"
+"@keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}"
+"#timer{font-size:32px;font-weight:700;color:var(--accent);margin:10px 0;}"
+"#status{font-size:15px;font-weight:600;color:#ccc;}"
+"#fallback{display:none;background:#2e2e2e;border:1px solid #3a3a3a;padding:15px;border-radius:12px;margin:15px 0;text-align:left;color:#eee;}"
+"#fallback-title{margin:0 0 6px;font-weight:700;color:#ff9b9b;font-size:15px;}"
+"#fallback-desc{margin:0 0 12px;font-size:13px;color:#ccc;}"
+".btn{display:block;text-align:center;padding:10px;border-radius:8px;text-decoration:none !important;font-weight:700;color:#fff !important;}"
+".btn:hover{text-decoration:none !important;color:#fff !important;}"
+".btn-primary{background:var(--accent);}"
+".btn-primary:hover{background:var(--accent-hover);}"
+".btn-secondary{background:#444;border:1px solid var(--border);margin-bottom:8px;}"
+".btn-secondary:hover{background:#555;}"
+".err{color:#ff9b9b;font-size:18px;}"
+"</style>";
 const char HTTP_SCRIPT[] PROGMEM = "<script>"
 "function c(l){"
 "  if(window.event) window.event.preventDefault();"
@@ -63,7 +104,7 @@ const char HTTP_SCRIPT[] PROGMEM = "<script>"
 "}"
 "</script>";
 //"<script>function c(l){document.getElementById('s').value=l.innerText||l.textContent;document.getElementById('p').focus();}</script>";
-const char HTTP_HEAD_END[] PROGMEM = "</head><body><div style='text-align:left;display:inline-block;min-width:260px;'>";
+const char HTTP_HEAD_END[] PROGMEM = "</head><body><div class='wrap'>";
 const char HTTP_PORTAL_OPTIONS[] PROGMEM = "<form action=\"/wifi\" method=\"get\"><button>Configure WiFi</button></form><br/><form action=\"/0wifi\" method=\"get\"><button>Configure WiFi (No Scan)</button></form><br/><form action=\"/i\" method=\"get\"><button>Info</button></form><br/><form action=\"/r\" method=\"post\"><button>Reset</button></form>";
 const char HTTP_ITEM[] PROGMEM = "<div><a href='#p' onclick='c(this)'>{v}</a>&nbsp;<span class='q {i}'>{r}%</span></div>";
 const char HTTP_FORM_START[] PROGMEM = "<form method='get' action='wifisave'><input id='s' name='s' length=32 placeholder='SSID'><br/><input id='p' name='p' length=64 type='password' placeholder='password'><br/>";
