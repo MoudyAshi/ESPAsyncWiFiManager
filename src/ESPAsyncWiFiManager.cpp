@@ -109,8 +109,6 @@ void AsyncWiFiManager::addParameter(AsyncWiFiManagerParameter *p)
 
 void AsyncWiFiManager::setupConfigPortal()
 {
-  // dnsServer.reset(new DNSServer());
-  // server.reset(new ESP8266WebServer(80));
   server->reset();
 
   DEBUG_WM(F(""));
@@ -184,21 +182,37 @@ void AsyncWiFiManager::setupConfigPortal()
   server->on("/fwlink",
              std::bind(&AsyncWiFiManager::handleWifi, this, std::placeholders::_1, true))
       .setFilter(ON_AP_FILTER); 
+  server->on("/status", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    if (_wifiConnectStatus == 1)
+      request->send(200, "text/plain", "SUCCESS");
+    else if (_wifiConnectStatus == 2)
+      request->send(200, "text/plain", "FAILED");
+    else
+      request->send(200, "text/plain", "CONNECTING");
+  }).setFilter(ON_AP_FILTER);
   server->on("/hotspot-detect.html", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send(200, "text/html", "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>");
   }).setFilter(ON_AP_FILTER);
   server->on("/canonical.html", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send(200, "text/html", "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>");
   }).setFilter(ON_AP_FILTER);
-  server->on("/status", HTTP_GET, [](AsyncWebServerRequest *request) {
-  if (_wifiConnectStatus == 1) {
-    request->send(200, "text/plain", "SUCCESS");
-  } else if (_wifiConnectStatus == 2) {
-    request->send(200, "text/plain", "FAILED");
-  } else {
-    request->send(200, "text/plain", "CONNECTING");
-  }
-}).setFilter(ON_AP_FILTER);
+  server->on("/generate_204", HTTP_GET, [](AsyncWebServerRequest *request) {
+  }).setFilter(ON_AP_FILTER);
+  server->on("/gen_204", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(204);
+  }).setFilter(ON_AP_FILTER);
+  server->on("/connecttest.txt", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->redirect("http://192.168.4.1/");
+  }).setFilter(ON_AP_FILTER);
+
+  server->on("/ncsi.txt", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->redirect("http://192.168.4.1/");
+  }).setFilter(ON_AP_FILTER);
+
+  server->on("/redirect", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->redirect("http://192.168.4.1/");
+  }).setFilter(ON_AP_FILTER);
   server->onNotFound(std::bind(&AsyncWiFiManager::handleNotFound, this, std::placeholders::_1));
   server->begin(); // web server start
   DEBUG_WM(F("HTTP server started"));
