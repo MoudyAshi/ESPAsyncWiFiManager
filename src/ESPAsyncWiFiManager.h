@@ -73,6 +73,7 @@ const char HTTP_SCAN_LINK[] PROGMEM = "<br/><div class=\"c\"><a href=\"/wifi\">S
 const char HTTP_SAVED[] PROGMEM = "<div>Credentials Saved<br />Trying to connect ESP to network.<br />If it fails reconnect to AP to try again</div>";
 const char HTTP_END[] PROGMEM = "</div></body></html>";
 
+static uint8_t _wifiConnectStatus = 0; // 0 = Connecting, 1 = Success, 2 = Failed
 #define WIFI_MANAGER_MAX_PARAMS 10
 
 class AsyncWiFiManagerParameter

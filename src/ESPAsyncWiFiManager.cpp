@@ -187,11 +187,18 @@ void AsyncWiFiManager::setupConfigPortal()
   server->on("/hotspot-detect.html", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send(200, "text/html", "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>");
   }).setFilter(ON_AP_FILTER);
-
   server->on("/canonical.html", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send(200, "text/html", "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>");
   }).setFilter(ON_AP_FILTER);
-
+  server->on("/status", HTTP_GET, [](AsyncWebServerRequest *request) {
+  if (_wifiConnectStatus == 1) {
+    request->send(200, "text/plain", "SUCCESS");
+  } else if (_wifiConnectStatus == 2) {
+    request->send(200, "text/plain", "FAILED");
+  } else {
+    request->send(200, "text/plain", "CONNECTING");
+  }
+}).setFilter(ON_AP_FILTER);
   server->onNotFound(std::bind(&AsyncWiFiManager::handleNotFound, this, std::placeholders::_1));
   server->begin(); // web server start
   DEBUG_WM(F("HTTP server started"));
@@ -647,7 +654,8 @@ boolean AsyncWiFiManager::startConfigPortal(char const *apName, char const *apPa
     if (connect)
     {
       connect = false;
-      delay(2000);
+      _wifiConnectStatus = 0; // Reset status to CONNECTING
+      delay(1000);
       DEBUG_WM(F("Connecting to new AP"));
 
       // using user-provided _ssid, _pass in place of system-stored ssid and pass
@@ -655,6 +663,7 @@ boolean AsyncWiFiManager::startConfigPortal(char const *apName, char const *apPa
       if (_tryConnectDuringConfigPortal and connectWifi(_ssid, _pass) == WL_CONNECTED)
       {
         WiFi.persistent(false);
+        _wifiConnectStatus = 1; // Mark SUCCESS
         // connected
         WiFi.mode(WIFI_STA);
         // notify that configuration has changed and any optional parameters should be saved
@@ -667,8 +676,11 @@ boolean AsyncWiFiManager::startConfigPortal(char const *apName, char const *apPa
       }
       else
       {
-          if(_tryConnectDuringConfigPortal)
-            DEBUG_WM(F("Failed to connect"));
+        _wifiConnectStatus = 2; // Mark FAILED (Wrong Password / Timeout)
+        DEBUG_WM(F("Connection Failed! Keeping AP active for retry..."));
+        WiFi.persistent(false);
+        WiFi.mode(WIFI_AP_STA); // Keep AP active
+        scannow = 0;
       }
 
       if (_shouldBreakAfterConfig)
@@ -1065,116 +1077,133 @@ void AsyncWiFiManager::handleWifi(AsyncWebServerRequest *request, boolean scan)
 // handle the WLAN save form and redirect to WLAN config page again
 void AsyncWiFiManager::handleWifiSave(AsyncWebServerRequest *request)
 {
-  DEBUG_WM(F("WiFi save"));
-  String page = getPageHeader("Luke Wi-Fi Setup");
-  // SAVE/connect here
   needInfo = true;
+  _wifiConnectStatus = 0; // Reset status to CONNECTING on form submit
   _ssid = request->arg("s").c_str();
   _pass = request->arg("p").c_str();
   const char* redirectUrl = "https://lukerobotarm.com/#connect";
- 
-  // parameters
+
+  // Process custom parameters
   for (unsigned int i = 0; i < _paramsCount; i++)
   {
-    if (_params[i] == NULL)
-    {
-      break;
-    }
-    // read parameter
+    if (_params[i] == NULL) break;
     String value = request->arg(_params[i]->getID()).c_str();
-    // store it in array
     value.toCharArray(_params[i]->_value, _params[i]->_length);
-
-    DEBUG_WM(F("Parameter"));
-    DEBUG_WM(_params[i]->getID());
-    DEBUG_WM(value);
   }
 
-  if (request->hasArg("ip"))
-  {
-    DEBUG_WM(F("static ip"));
-    DEBUG_WM(request->arg("ip"));
-    //_sta_static_ip.fromString(request->arg("ip"));
-    String ip = request->arg("ip");
-    optionalIPFromString(&_sta_static_ip, ip.c_str());
-  }
-  if (request->hasArg("gw"))
-  {
-    DEBUG_WM(F("static gateway"));
-    DEBUG_WM(request->arg("gw"));
-    String gw = request->arg("gw");
-    optionalIPFromString(&_sta_static_gw, gw.c_str());
-  }
-  if (request->hasArg("sn"))
-  {
-    DEBUG_WM(F("static netmask"));
-    DEBUG_WM(request->arg("sn"));
-    String sn = request->arg("sn");
-    optionalIPFromString(&_sta_static_sn, sn.c_str());
-  }
-  if (request->hasArg("dns1"))
-  {
-    DEBUG_WM(F("static DNS 1"));
-    DEBUG_WM(request->arg("dns1"));
-    String dns1 = request->arg("dns1");
-    optionalIPFromString(&_sta_static_dns1, dns1.c_str());
-  }
-  if (request->hasArg("dns2"))
-  {
-    DEBUG_WM(F("static DNS 2"));
-    DEBUG_WM(request->arg("dns2"));
-    String dns2 = request->arg("dns2");
-    optionalIPFromString(&_sta_static_dns2, dns2.c_str());
-  }
+  // Process static IP settings
+  if (request->hasArg("ip")) optionalIPFromString(&_sta_static_ip, request->arg("ip").c_str());
+  if (request->hasArg("gw")) optionalIPFromString(&_sta_static_gw, request->arg("gw").c_str());
+  if (request->hasArg("sn")) optionalIPFromString(&_sta_static_sn, request->arg("sn").c_str());
+  if (request->hasArg("dns1")) optionalIPFromString(&_sta_static_dns1, request->arg("dns1").c_str());
+  if (request->hasArg("dns2")) optionalIPFromString(&_sta_static_dns2, request->arg("dns2").c_str());
 
-  page += F("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
-  page += F("<title>Connecting Luke...</title>");
-  page += F("<style>");
-  page += F("body { font-family: sans-serif; text-align: center; padding: 30px; background: #f4f4f6; }");
-  page += F(".card { background: white; padding: 25px; border-radius: 12px; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 400px; }");
-  page += F("#status { font-size: 16px; font-weight: bold; color: #007aff; margin: 15px 0; }");
-  page += F(".spinner { border: 4px solid #f3f3f3; border-top: 4px solid #007aff; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 10px auto; }");
-  page += F("@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }");
-  page += F("</style></head><body>");
+  String page = getPageHeader("Connecting Luke...");
 
-  page += F("<div class='card'>");
-  page += F("<h2>Credentials Saved!</h2>");
-  page += F("<p>Luke is joining your network.</p>");
-  page += F("<div class='spinner'></div>");
-  page += F("<p id='status'>Waiting for the device to reconnect to Wi-Fi...</p>");
-  page += F("<p>Manually redirect, <a href='");
+  page += F("<div style='text-align:center; padding: 10px;'>");
+  page += F("<h2 style='color:#007aff; margin-bottom:5px;'>Connecting Luke...</h2>");
+  page += F("<p style='margin-top:0;'>Attempting to join <b>");
+  page += _ssid;
+  page += F("</b></p>");
+
+  // Countdown Display & Spinner
+  page += F("<div id='spinner' style='border: 4px solid #f3f3f3; border-top: 4px solid #007aff; border-radius: 50%; width: 36px; height: 36px; animation: spin 1s linear infinite; margin: 15px auto;'></div>");
+  page += F("<style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>");
+  
+  page += F("<div id='timer' style='font-size: 32px; font-weight: bold; color: #007aff; margin: 10px 0;'>30</div>");
+  page += F("<p id='status' style='font-size: 15px; font-weight: bold; color: #555;'>Testing connection...</p>");
+
+  // Fallback Container (Hidden by default)
+  page += F("<div id='fallback' style='display:none; background:#f0f0f5; padding:15px; border-radius:10px; margin:15px 0; text-align:left;'>");
+  page += F("<p id='fallback-title' style='margin:0 0 6px 0; font-weight:bold; color:#d32f2f; font-size:15px;'></p>");
+  page += F("<p id='fallback-desc' style='margin:0 0 12px 0; font-size:13px; color:#444;'></p>");
+  
+  // Re-enter Password Button (Always visible on failure/timeout)
+  page += F("<a id='btn-retry' href='/wifi' style='display:block; text-align:center; background:#007aff; color:white; padding:10px; border-radius:8px; text-decoration:none; font-weight:bold; margin-bottom:5px;'>Re-enter Password</a>");
+
+  // Open Luke Controller Section (Shown ONLY if 20s timer times out)
+  page += F("<div id='controller-section' style='display:none;'>");
+  page += F("<hr style='border:none; border-top:1px solid #ccc; margin:12px 0;'>");
+  page += F("<p style='margin:0 0 8px 0; font-size:13px; color:#444;'>If Luke connected successfully and your phone joined home Wi-Fi:</p>");
+  page += F("<a href='");
   page += redirectUrl;
-  page += F("'>click here</a> once reconnected.</p>");
+  page += F("' style='display:block; text-align:center; background:#34c759; color:white; padding:10px; border-radius:8px; text-decoration:none; font-weight:bold;' target='_blank'>Open Luke Controller</a>");
   page += F("</div>");
 
-  // Smart Polling Script
+  page += F("</div>");
+  page += F("</div>");
+
+  // JavaScript Logic
   page += F("<script>");
+  page += F("let timeLeft = 30;");
   page += F("const targetUrl = '");
   page += redirectUrl;
   page += F("';");
+  page += F("const timerEl = document.getElementById('timer');");
   page += F("const statusEl = document.getElementById('status');");
-  page += F("let checkInterval;");
+  page += F("const spinnerEl = document.getElementById('spinner');");
+  page += F("const fallbackEl = document.getElementById('fallback');");
+  page += F("const titleEl = document.getElementById('fallback-title');");
+  page += F("const descEl = document.getElementById('fallback-desc');");
+  page += F("const controllerSec = document.getElementById('controller-section');");
 
-  page += F("function checkConnection() {");
-  // Use fetch with mode 'no-cors' to test WAN connectivity without failing CORS checks
+  // 1. Status Polling for Instant Error Catching
+  page += F("let statusPoll = setInterval(() => {");
+  page += F("  fetch('/status')");
+  page += F("    .then(res => res.text())");
+  page += F("    .then(data => {");
+  page += F("      if (data === 'FAILED') {");
+  page += F("        clearInterval(statusPoll);");
+  page += F("        clearInterval(timerInterval);");
+  page += F("        clearInterval(checkInterval);");
+  page += F("        if (spinnerEl) spinnerEl.style.display = 'none';");
+  page += F("        if (timerEl) timerEl.style.display = 'none';");
+  page += F("        statusEl.innerHTML = \"<span style='color:#d32f2f; font-size:18px;'>Incorrect Wi-Fi Password!</span>\";");
+  page += F("        titleEl.innerText = 'Authentication Failed';");
+  page += F("        descEl.innerText = 'The password entered for ");
+  page += _ssid;
+  page += F(" was incorrect. Please try again.';");
+  page += F("        controllerSec.style.display = 'none';"); // Hide Controller Option on Wrong Password
+  page += F("        fallbackEl.style.display = 'block';");
+  page += F("      } else if (data === 'SUCCESS') {");
+  page += F("        clearInterval(statusPoll);");
+  page += F("        statusEl.innerText = 'Connected! Redirecting...';");
+  page += F("      }");
+  page += F("    }).catch(() => {});");
+  page += F("}, 1000);");
+
+  // 2. Backup WAN Connection Polling
+  page += F("let checkInterval = setInterval(() => {");
   page += F("  fetch(targetUrl, { mode: 'no-cors', cache: 'no-cache' })");
   page += F("    .then(() => {");
   page += F("      clearInterval(checkInterval);");
+  page += F("      clearInterval(timerInterval);");
+  page += F("      clearInterval(statusPoll);");
   page += F("      statusEl.innerText = 'Connected! Redirecting...';");
   page += F("      window.location.href = targetUrl;");
-  page += F("    })");
-  page += F("    .catch(() => {");
-  page += F("      statusEl.innerText = 'Reconnecting to local Wi-Fi...';");
-  page += F("    });");
-  page += F("}");
+  page += F("    }).catch(() => {});");
+  page += F("}, 2000);");
 
-  // Wait 4 seconds for ESP to shut down AP, then poll every 2 seconds
-  page += F("setTimeout(() => {");
-  page += F("  checkInterval = setInterval(checkConnection, 2000);");
-  page += F("}, 4000);");
+  // 3. 20-Second Countdown Timer
+  page += F("let timerInterval = setInterval(() => {");
+  page += F("  timeLeft--;");
+  page += F("  if (timerEl) timerEl.innerText = timeLeft;");
+  page += F("  if (timeLeft <= 0) {");
+  page += F("    clearInterval(timerInterval);");
+  page += F("    clearInterval(checkInterval);");
+  page += F("    clearInterval(statusPoll);");
+  page += F("    if (spinnerEl) spinnerEl.style.display = 'none';");
+  page += F("    if (timerEl) timerEl.style.display = 'none';");
+  page += F("    statusEl.innerText = 'Connection status unconfirmed.';");
+  page += F("    titleEl.innerText = 'Time Out / Status Unconfirmed';");
+  page += F("    descEl.innerText = 'If Luke connected, open the controller below. Otherwise, re-enter your password:';");
+  page += F("    controllerSec.style.display = 'block';"); // Show Controller Option on 20s Timeout
+  page += F("    fallbackEl.style.display = 'block';");
+  page += F("  }");
+  page += F("}, 1000);");
   page += F("</script>");
 
-  page += F("</body></html>");
+  page += FPSTR(HTTP_END);
 
   request->send(200, "text/html", page);
   connect = true;
