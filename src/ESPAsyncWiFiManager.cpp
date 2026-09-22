@@ -164,7 +164,7 @@ void AsyncWiFiManager::setupConfigPortal()
 
   // setup web pages: root, wifi config pages, SO captive portal detectors and not found
   server->on("/",
-             std::bind(&AsyncWiFiManager::handleRoot, this, std::placeholders::_1))
+             std::bind(&AsyncWiFiManager::handleWifi, this, std::placeholders::_1, true))
       .setFilter(ON_AP_FILTER);
   server->on("/wifi",
              std::bind(&AsyncWiFiManager::handleWifi, this, std::placeholders::_1, true))
@@ -182,8 +182,16 @@ void AsyncWiFiManager::setupConfigPortal()
              std::bind(&AsyncWiFiManager::handleReset, this, std::placeholders::_1))
       .setFilter(ON_AP_FILTER);
   server->on("/fwlink",
-             std::bind(&AsyncWiFiManager::handleRoot, this, std::placeholders::_1))
-      .setFilter(ON_AP_FILTER); // Microsoft captive portal. Maybe not needed. Might be handled by notFound handler.
+             std::bind(&AsyncWiFiManager::handleWifi, this, std::placeholders::_1, true))
+      .setFilter(ON_AP_FILTER); 
+  server->on("/hotspot-detect.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(200, "text/html", "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>");
+  }).setFilter(ON_AP_FILTER);
+
+  server->on("/canonical.html", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(200, "text/html", "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>");
+  }).setFilter(ON_AP_FILTER);
+
   server->onNotFound(std::bind(&AsyncWiFiManager::handleNotFound, this, std::placeholders::_1));
   server->begin(); // web server start
   DEBUG_WM(F("HTTP server started"));
@@ -302,7 +310,7 @@ String AsyncWiFiManager::networkListAsString()
 
     if (_minimumQuality == 0 || _minimumQuality < quality)
     {
-      String item = FPSTR(HTTP_ITEM);
+      String item = F("<div><a href='javascript:void(0);' data-ssid='{v}' onclick='c(this); return false;'>{v}</a> <span>{r}%</span></div>");
       String rssiQ;
       rssiQ += quality;
       item.replace("{v}", wifiSSIDs[i].SSID);
@@ -924,9 +932,8 @@ void AsyncWiFiManager::handleWifi(AsyncWebServerRequest *request, boolean scan)
   scannow = 0;
 
   DEBUG_WM(F("Handle wifi"));
-
-  String page = FPSTR(WFM_HTTP_HEAD);
-  page.replace("{v}", "Config ESP");
+  String page = getPageHeader("Luke Wi-Fi Setup");
+  page.replace("{v}", "Luke Wi-Fi Setup");
   page += FPSTR(HTTP_SCRIPT);
   page += FPSTR(HTTP_STYLE);
   page += _customHeadElement;
@@ -940,11 +947,11 @@ void AsyncWiFiManager::handleWifi(AsyncWebServerRequest *request, boolean scan)
     if (wifiSSIDCount == 0)
     {
       DEBUG_WM(F("No networks found"));
-      page += F("No networks found. Refresh to scan again");
+      page += F("<div style='margin-bottom: 10px;'>No networks found. Tap 'Rescan' below.</div>");
     }
     else
     {
-      // display networks in page
+      // display scanned networks list at the top
       String pager = networkListAsString();
       page += pager;
       page += "<br/>";
@@ -955,7 +962,7 @@ void AsyncWiFiManager::handleWifi(AsyncWebServerRequest *request, boolean scan)
   page += FPSTR(HTTP_FORM_START);
   char parLength[2];
 
-  // add the extra parameters to the form
+  // Add custom parameters (if any)
   for (unsigned int i = 0; i < _paramsCount; i++)
   {
     if (_params[i] == NULL)
@@ -985,6 +992,8 @@ void AsyncWiFiManager::handleWifi(AsyncWebServerRequest *request, boolean scan)
   {
     page += "<br/>";
   }
+
+  // Static IP fields (if enabled)
   if (_sta_static_ip)
   {
     String item = FPSTR(HTTP_FORM_PARAM);
@@ -1033,8 +1042,19 @@ void AsyncWiFiManager::handleWifi(AsyncWebServerRequest *request, boolean scan)
     page += item;
     page += "<br/>";
   }
+
+  // Close the main connection form
   page += FPSTR(HTTP_FORM_END);
-  page += FPSTR(HTTP_SCAN_LINK);
+
+  // --- SECONDARY ACTION BUTTONS / FOOTER LINKS ---
+  // Replaces the single HTTP_SCAN_LINK with a neat utility footer
+  page += F("<div style='margin-top: 20px; text-align: center; font-size: 14px; opacity: 0.85;'>");
+  page += F("<a href='/wifi' style='margin: 0 8px;'>Rescan</a> | ");
+  page += F("<a href='/0wifi' style='margin: 0 8px;'>Manual SSID</a> | ");
+  page += F("<a href='/i' style='margin: 0 8px;'>Device Info</a> | ");
+  page += F("<a href='/r' style='margin: 0 8px;' onclick='return confirm(\"Reboot device?\")'>Reset</a>");
+  page += F("</div><br/>");
+
   page += FPSTR(HTTP_END);
 
   request->send(200, "text/html", page);
@@ -1046,12 +1066,13 @@ void AsyncWiFiManager::handleWifi(AsyncWebServerRequest *request, boolean scan)
 void AsyncWiFiManager::handleWifiSave(AsyncWebServerRequest *request)
 {
   DEBUG_WM(F("WiFi save"));
-
+  String page = getPageHeader("Luke Wi-Fi Setup");
   // SAVE/connect here
   needInfo = true;
   _ssid = request->arg("s").c_str();
   _pass = request->arg("p").c_str();
-
+  const char* redirectUrl = "https://lukerobotarm.com/#connect";
+ 
   // parameters
   for (unsigned int i = 0; i < _paramsCount; i++)
   {
@@ -1106,21 +1127,57 @@ void AsyncWiFiManager::handleWifiSave(AsyncWebServerRequest *request)
     optionalIPFromString(&_sta_static_dns2, dns2.c_str());
   }
 
-  String page = FPSTR(WFM_HTTP_HEAD);
-  page.replace("{v}", "Credentials Saved");
-  page += FPSTR(HTTP_SCRIPT);
-  page += FPSTR(HTTP_STYLE);
-  page += _customHeadElement;
-  page += F("<meta http-equiv=\"refresh\" content=\"5; url=/i\">");
-  page += FPSTR(HTTP_HEAD_END);
-  page += FPSTR(HTTP_SAVED);
-  page += FPSTR(HTTP_END);
+  page += F("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
+  page += F("<title>Connecting Luke...</title>");
+  page += F("<style>");
+  page += F("body { font-family: sans-serif; text-align: center; padding: 30px; background: #f4f4f6; }");
+  page += F(".card { background: white; padding: 25px; border-radius: 12px; display: inline-block; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 400px; }");
+  page += F("#status { font-size: 16px; font-weight: bold; color: #007aff; margin: 15px 0; }");
+  page += F(".spinner { border: 4px solid #f3f3f3; border-top: 4px solid #007aff; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 10px auto; }");
+  page += F("@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }");
+  page += F("</style></head><body>");
+
+  page += F("<div class='card'>");
+  page += F("<h2>Credentials Saved!</h2>");
+  page += F("<p>Luke is joining your network.</p>");
+  page += F("<div class='spinner'></div>");
+  page += F("<p id='status'>Waiting for the device to reconnect to Wi-Fi...</p>");
+  page += F("<p>Manually redirect, <a href='");
+  page += redirectUrl;
+  page += F("'>click here</a> once reconnected.</p>");
+  page += F("</div>");
+
+  // Smart Polling Script
+  page += F("<script>");
+  page += F("const targetUrl = '");
+  page += redirectUrl;
+  page += F("';");
+  page += F("const statusEl = document.getElementById('status');");
+  page += F("let checkInterval;");
+
+  page += F("function checkConnection() {");
+  // Use fetch with mode 'no-cors' to test WAN connectivity without failing CORS checks
+  page += F("  fetch(targetUrl, { mode: 'no-cors', cache: 'no-cache' })");
+  page += F("    .then(() => {");
+  page += F("      clearInterval(checkInterval);");
+  page += F("      statusEl.innerText = 'Connected! Redirecting...';");
+  page += F("      window.location.href = targetUrl;");
+  page += F("    })");
+  page += F("    .catch(() => {");
+  page += F("      statusEl.innerText = 'Reconnecting to local Wi-Fi...';");
+  page += F("    });");
+  page += F("}");
+
+  // Wait 4 seconds for ESP to shut down AP, then poll every 2 seconds
+  page += F("setTimeout(() => {");
+  page += F("  checkInterval = setInterval(checkConnection, 2000);");
+  page += F("}, 4000);");
+  page += F("</script>");
+
+  page += F("</body></html>");
 
   request->send(200, "text/html", page);
-
-  DEBUG_WM(F("Sent wifi save page"));
-
-  connect = true; // signal ready to connect/reset
+  connect = true;
 }
 
 // handle the info page
@@ -1173,8 +1230,7 @@ String AsyncWiFiManager::infoAsString()
 void AsyncWiFiManager::handleInfo(AsyncWebServerRequest *request)
 {
   DEBUG_WM(F("Info"));
-
-  String page = FPSTR(WFM_HTTP_HEAD);
+  String page = getPageHeader("Luke Wi-Fi Setup");
   page.replace("{v}", "Info");
   page += FPSTR(HTTP_SCRIPT);
   page += FPSTR(HTTP_STYLE);
@@ -1192,6 +1248,12 @@ void AsyncWiFiManager::handleInfo(AsyncWebServerRequest *request)
     page += F("</dd>");
   }
   page += pager;
+  page += F("<div style='margin-top: 20px; text-align: center; font-size: 14px; opacity: 0.85;'>");
+  page += F("<a href='/wifi' style='margin: 0 8px;'>Rescan</a> | ");
+  page += F("<a href='/0wifi' style='margin: 0 8px;'>Manual SSID</a> | ");
+  page += F("<a href='/i' style='margin: 0 8px;'>Device Info</a> | ");
+  page += F("<a href='/r' style='margin: 0 8px;' onclick='return confirm(\"Reboot device?\")'>Reset</a>");
+  page += F("</div><br/>");
   page += FPSTR(HTTP_END);
 
   request->send(200, "text/html", page);
@@ -1351,4 +1413,23 @@ String AsyncWiFiManager::toStringIp(IPAddress ip)
   }
   res += String(((ip >> 8 * 3)) & 0xFF);
   return res;
+}
+
+String AsyncWiFiManager::getPageHeader(const String& pageTitle)
+{
+  String page = FPSTR(WFM_HTTP_HEAD);
+  page.replace("{v}", pageTitle);
+  page += FPSTR(HTTP_SCRIPT);
+  page += FPSTR(HTTP_STYLE);
+  page += _customHeadElement;
+  page += FPSTR(HTTP_HEAD_END);
+
+  // Top Title Bar displaying Luke Wi-Fi and Unique Device ID
+  page += F("<div style='text-align:center; margin-bottom:15px;'>");
+  page += F("<h1 style='margin:0; font-size:24px; color:#007aff;'>Luke Wi-Fi</h1>");
+  page += F("<div style='font-size:14px; opacity:0.75; font-weight:bold;'>ID: ");
+  page += (_apName != NULL) ? _apName : "Luke-Device";
+  page += F("</div></div>");
+
+  return page;
 }
