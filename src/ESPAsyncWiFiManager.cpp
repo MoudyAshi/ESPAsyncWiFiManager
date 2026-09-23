@@ -186,6 +186,7 @@ void AsyncWiFiManager::setupConfigPortal()
     request->send(200, "text/html", "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>");
   }).setFilter(ON_AP_FILTER);
   server->on("/generate_204", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(204);
   }).setFilter(ON_AP_FILTER);
   server->on("/gen_204", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send(204);
@@ -655,7 +656,7 @@ boolean AsyncWiFiManager::startConfigPortal(char const *apName, char const *apPa
 
         DEBUG_WM(F("Wi-Fi Connected! Holding AP briefly for browser polling..."));
         delay(2500); // Gives browser time to poll /status and receive "SUCCESS"
-
+        WiFi.softAPdisconnect(true);
         WiFi.mode(WIFI_STA);
         if (_savecallback != NULL)
         {
@@ -1096,6 +1097,7 @@ void AsyncWiFiManager::handleWifiSave(AsyncWebServerRequest *request)
 
   // JavaScript Logic
   page += F("<script>");
+  page += F("let statusPoll, checkInterval, timerInterval;");
   page += F("let timeLeft = 15;");
   page += F("const targetUrl = '");
   page += redirectUrl;
@@ -1109,7 +1111,7 @@ void AsyncWiFiManager::handleWifiSave(AsyncWebServerRequest *request)
   page += F("const controllerSec = document.getElementById('controller-section');");
 
   // 1. Status Polling for Instant Error Catching
-  page += F("let statusPoll = setInterval(() => {");
+  page += F("statusPoll = setInterval(() => {");
   page += F("  fetch('/status')");
   page += F("    .then(res => res.text())");
   page += F("    .then(data => {");
@@ -1134,7 +1136,7 @@ void AsyncWiFiManager::handleWifiSave(AsyncWebServerRequest *request)
   page += F("}, 1000);");
 
   // 2. Backup WAN Connection Polling
-  page += F("let checkInterval = setInterval(() => {");
+  page += F("checkInterval = setInterval(() => {");
   page += F("  fetch(targetUrl, { mode: 'no-cors', cache: 'no-cache' })");
   page += F("    .then(() => {");
   page += F("      clearInterval(checkInterval);");
@@ -1146,7 +1148,7 @@ void AsyncWiFiManager::handleWifiSave(AsyncWebServerRequest *request)
   page += F("}, 2000);");
 
   // 3. 15-Second Countdown Timer
-  page += F("let timerInterval = setInterval(() => {");
+  page += F("timerInterval = setInterval(() => {");
   page += F("  timeLeft--;");
   page += F("  if (timerEl) timerEl.innerText = timeLeft;");
   page += F("  if (timeLeft <= 0) {");
@@ -1157,7 +1159,7 @@ void AsyncWiFiManager::handleWifiSave(AsyncWebServerRequest *request)
   page += F("    if (timerEl) timerEl.style.display = 'none';");
   page += F("    statusEl.innerText = 'Connection status unconfirmed.';");
   page += F("    titleEl.innerText = 'Timed Out';");
-  page += F("    descEl.innerText = 'If Luke couldn't connect, re-enter your Wi-Fi credentials:';");
+  page += F("    descEl.innerText = 'If Luke could not connect, re-enter your Wi-Fi credentials:';");
   page += F("    controllerSec.style.display = 'block';"); // Show Controller Option on 20s Timeout
   page += F("    fallbackEl.style.display = 'block';");
   page += F("  }");
