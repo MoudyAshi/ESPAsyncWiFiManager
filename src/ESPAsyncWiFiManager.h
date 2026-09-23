@@ -61,17 +61,17 @@ const char HTTP_STYLE[] PROGMEM =
 "h1{font-size:1.5rem;margin:0;}"
 "h2{font-size:1.35rem;margin:.2rem 0 .6rem;}"
 "p{margin:0 0 .85rem;}"
-"button,input[type=submit]{border-radius:8px;border:1px solid transparent;padding:.6em 1.2em;font-size:1em;font-weight:600;font-family:inherit;background:var(--accent);color:#fff;cursor:pointer;width:100%;line-height:2.4rem;}"
+"button,input[type=submit]{border-radius:8px;border:1px solid transparent;padding:.6em 1.2em;font-size:1em;font-weight:600;font-family:inherit;background:var(--accent);color:#fff;cursor:pointer;width:100%;line-height:2.4rem;margin-top:6px;}"
 "button:hover,input[type=submit]:hover{background:var(--accent-hover);}"
 "button:focus,button:focus-visible,input:focus{outline:2px solid var(--accent);outline-offset:2px;}"
-"input{width:95%;padding:.55rem .75rem;border:1px solid var(--border);border-radius:6px;background:#333;color:#fff;font-size:1rem;font-family:inherit;}"
-"input:focus{border-color:var(--accent);}"
+"input{width:100%;padding:.55rem .75rem;margin-bottom:10px;border:1px solid var(--border);border-radius:6px;background:#333;color:#fff;font-size:1rem;font-family:inherit;}"
+"input:focus{border-color:var(--accent);outline:none;}"
 "::placeholder{color:#999;}"
 ".c{text-align:center;}"
-"div,input{padding:5px;font-size:1em;}"
+"div{padding:5px;font-size:1em;}"
 ".q{float:right;width:64px;text-align:right;color:#ccc;}"
 ".l{background:url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAALVBMVEX///8EBwfBwsLw8PAzNjaCg4NTVVUjJiZDRUUUFxdiZGSho6OSk5Pg4eFydHTCjaf3AAAAZElEQVQ4je2NSw7AIAhEBamKn97/uMXEGBvozkWb9C2Zx4xzWykBhFAeYp9gkLyZE0zIMno9n4g19hmdY39scwqVkOXaxph0ZCXQcqxSpgQpONa59wkRDOL93eAXvimwlbPbwwVAegLS1HGfZAAAAABJRU5ErkJggg==\") no-repeat left center;background-size:1em;filter:invert(1);}"
-".wrap{text-align:left;display:inline-block;min-width:260px;max-width:440px;width:92%;margin:16px auto;background:#242424;border:1px solid #333;border-radius:12px;padding:1.1rem 1.2rem 1.3rem;}"
+".wrap{text-align:left;display:block;min-width:260px;max-width:440px;width:92%;margin:20px auto;background:#242424;border:1px solid #333;border-radius:12px;padding:1.1rem 1.2rem 1.3rem;}"
 ".links{margin-top:20px;text-align:center;font-size:14px;opacity:.9;}"
 ".links a{margin:0 8px;}"
 "dt{font-weight:600;color:var(--accent);margin-top:.55rem;}"
@@ -89,6 +89,8 @@ const char HTTP_STYLE[] PROGMEM =
 ".btn-primary:hover{background:var(--accent-hover);}"
 ".btn-secondary{background:#444;border:1px solid var(--border);margin-bottom:8px;}"
 ".btn-secondary:hover{background:#555;}"
+".pw-toggle{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#ccc;cursor:pointer;margin:4px 0 12px;user-select:none;}"
+".pw-toggle input{width:auto !important;padding:0;margin:0;cursor:pointer;}"
 ".err{color:#ff9b9b;font-size:18px;}"
 "</style>";
 const char HTTP_SCRIPT[] PROGMEM = "<script>"
@@ -102,12 +104,16 @@ const char HTTP_SCRIPT[] PROGMEM = "<script>"
 "  if(p) p.focus();"
 "  return false;"
 "}"
+"function tp(){"
+"  var p = document.getElementById('p');"
+"  if(p) p.type = (p.type === 'password') ? 'text' : 'password';"
+"}"
 "</script>";
 //"<script>function c(l){document.getElementById('s').value=l.innerText||l.textContent;document.getElementById('p').focus();}</script>";
 const char HTTP_HEAD_END[] PROGMEM = "</head><body><div class='wrap'>";
 const char HTTP_PORTAL_OPTIONS[] PROGMEM = "<form action=\"/wifi\" method=\"get\"><button>Configure WiFi</button></form><br/><form action=\"/0wifi\" method=\"get\"><button>Configure WiFi (No Scan)</button></form><br/><form action=\"/i\" method=\"get\"><button>Info</button></form><br/><form action=\"/r\" method=\"post\"><button>Reset</button></form>";
 const char HTTP_ITEM[] PROGMEM = "<div><a href='#p' onclick='c(this)'>{v}</a>&nbsp;<span class='q {i}'>{r}%</span></div>";
-const char HTTP_FORM_START[] PROGMEM = "<form method='get' action='wifisave'><input id='s' name='s' length=32 placeholder='SSID'><br/><input id='p' name='p' length=64 type='password' placeholder='password'><br/>";
+const char HTTP_FORM_START[] PROGMEM = "<form method='get' action='wifisave'><input id='s' name='s' length=32 placeholder='SSID'><input id='p' name='p' length=64 type='password' placeholder='Password'><label class='pw-toggle'><input type='checkbox' onclick='tp()'> Show Password</label>";
 const char HTTP_FORM_PARAM[] PROGMEM = "<br/><input id='{i}' name='{n}' length={l} placeholder='{p}' value='{v}' {c}>";
 const char HTTP_FORM_END[] PROGMEM = "<br/><button type='submit'>save</button></form>";
 const char HTTP_SCAN_LINK[] PROGMEM = "<br/><div class=\"c\"><a href=\"/wifi\">Scan</a></div>";
@@ -183,7 +189,6 @@ public:
   void loop();
   void safeLoop();
   void criticalLoop();
-  String infoAsString();
 
   boolean autoConnect(unsigned long maxConnectRetries = 1,
                       unsigned long retryDelayMs = 1000);
@@ -312,8 +317,6 @@ private:
   void handleRoot(AsyncWebServerRequest *);
   void handleWifi(AsyncWebServerRequest *, boolean scan);
   void handleWifiSave(AsyncWebServerRequest *);
-  void handleInfo(AsyncWebServerRequest *);
-  void handleReset(AsyncWebServerRequest *);
   void handleNotFound(AsyncWebServerRequest *);
   boolean captivePortal(AsyncWebServerRequest *);
 

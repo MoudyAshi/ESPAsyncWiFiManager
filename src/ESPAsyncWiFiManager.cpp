@@ -157,9 +157,6 @@ void AsyncWiFiManager::setupConfigPortal()
   {
     DEBUG_WM(F("Could not start Captive DNS Server!"));
   }
-
-  setInfo();
-
   // setup web pages: root, wifi config pages, SO captive portal detectors and not found
   server->on("/",
              std::bind(&AsyncWiFiManager::handleWifi, this, std::placeholders::_1, true))
@@ -167,17 +164,8 @@ void AsyncWiFiManager::setupConfigPortal()
   server->on("/wifi",
              std::bind(&AsyncWiFiManager::handleWifi, this, std::placeholders::_1, true))
       .setFilter(ON_AP_FILTER);
-  server->on("/0wifi",
-             std::bind(&AsyncWiFiManager::handleWifi, this, std::placeholders::_1, false))
-      .setFilter(ON_AP_FILTER);
   server->on("/wifisave",
              std::bind(&AsyncWiFiManager::handleWifiSave, this, std::placeholders::_1))
-      .setFilter(ON_AP_FILTER);
-  server->on("/i",
-             std::bind(&AsyncWiFiManager::handleInfo, this, std::placeholders::_1))
-      .setFilter(ON_AP_FILTER);
-  server->on("/r",
-             std::bind(&AsyncWiFiManager::handleReset, this, std::placeholders::_1))
       .setFilter(ON_AP_FILTER);
   server->on("/fwlink",
              std::bind(&AsyncWiFiManager::handleWifi, this, std::placeholders::_1, true))
@@ -351,10 +339,6 @@ String AsyncWiFiManager::networkListAsString()
       }
       pager += item;
     }
-    else
-    {
-      DEBUG_WM(F("Skipping due to quality"));
-    }
   }
   return pager;
 }
@@ -373,7 +357,7 @@ void AsyncWiFiManager::scan(boolean async)
   {
     return;
   }
-  DEBUG_WM(F("About to scan()"));
+  // DEBUG_WM(F("About to scan()"));
   if (wifiSSIDscan)
   {
     wifi_ssid_count_t n = WiFi.scanNetworks(async);
@@ -402,7 +386,7 @@ void AsyncWiFiManager::copySSIDInfo(wifi_ssid_count_t n)
   }
   else
   {
-    DEBUG_WM(F("Scan done"));
+    // DEBUG_WM(F("Scan done"));
   }
 
   if (n > 0)
@@ -470,7 +454,7 @@ void AsyncWiFiManager::copySSIDInfo(wifi_ssid_count_t n)
         {
           if (cssid == wifiSSIDs[j].SSID)
           {
-            DEBUG_WM("DUP AP: " + wifiSSIDs[j].SSID);
+            //DEBUG_WM("DUP AP: " + wifiSSIDs[j].SSID);
             wifiSSIDs[j].duplicate = true; // set dup aps to NULL
           }
         }
@@ -522,16 +506,6 @@ void AsyncWiFiManager::loop()
 {
   safeLoop();
   criticalLoop();
-}
-
-void AsyncWiFiManager::setInfo()
-{
-  if (needInfo)
-  {
-    pager = infoAsString();
-    wifiStatus = WiFi.status();
-    needInfo = false;
-  }
 }
 
 // anything that accesses WiFi, ESP or EEPROM goes here
@@ -674,19 +648,20 @@ boolean AsyncWiFiManager::startConfigPortal(char const *apName, char const *apPa
 
       // using user-provided _ssid, _pass in place of system-stored ssid and pass
       WiFi.persistent(true);
-      if (_tryConnectDuringConfigPortal and connectWifi(_ssid, _pass) == WL_CONNECTED)
+      if (connectWifi(_ssid, _pass) == WL_CONNECTED)
       {
-        WiFi.persistent(false);
         _wifiConnectStatus = 1; // Mark SUCCESS
-        // connected
+        WiFi.persistent(false);
+
+        DEBUG_WM(F("Wi-Fi Connected! Holding AP briefly for browser polling..."));
+        delay(2500); // Gives browser time to poll /status and receive "SUCCESS"
+
         WiFi.mode(WIFI_STA);
-        // notify that configuration has changed and any optional parameters should be saved
         if (_savecallback != NULL)
         {
-          // TODO: check if any custom parameters actually exist, and check if they really changed maybe
           _savecallback();
         }
-        break;
+        break; // Exit portal loop on success
       }
       else
       {
@@ -699,11 +674,8 @@ boolean AsyncWiFiManager::startConfigPortal(char const *apName, char const *apPa
 
       if (_shouldBreakAfterConfig)
       {
-        // flag set to exit after config after trying to connect
-        // notify that configuration has changed and any optional parameters should be saved
         if (_savecallback != NULL)
         {
-          // TODO: check if any custom parameters actually exist, and check if they really changed maybe
           _savecallback();
         }
         break;
@@ -737,14 +709,7 @@ uint8_t AsyncWiFiManager::connectWifi(String ssid, String pass)
   // check if we have ssid and pass and force those, if not, try with last saved values
   if (ssid != "")
   {
-#if defined(ESP8266)
-    // trying to fix connection in progress hanging
-    ETS_UART_INTR_DISABLE();
-    wifi_station_disconnect();
-    ETS_UART_INTR_ENABLE();
-#else
     WiFi.disconnect(false);
-#endif
     WiFi.begin(ssid.c_str(), pass.c_str());
   }
   else
@@ -752,14 +717,7 @@ uint8_t AsyncWiFiManager::connectWifi(String ssid, String pass)
     if (WiFi.SSID().length() > 0)
     {
       DEBUG_WM(F("Using last saved values, should be faster"));
-#if defined(ESP8266)
-      // trying to fix connection in progress hanging
-      ETS_UART_INTR_DISABLE();
-      wifi_station_disconnect();
-      ETS_UART_INTR_ENABLE();
-#else
       WiFi.disconnect(false);
-#endif
       WiFi.begin();
     }
     else
@@ -782,7 +740,6 @@ uint8_t AsyncWiFiManager::connectWifi(String ssid, String pass)
   }
 #endif
   needInfo = true;
-  setInfo();
   return connRes;
 }
 
@@ -842,22 +799,6 @@ String AsyncWiFiManager::getConfigPortalSSID()
   return _apName;
 }
 
-void AsyncWiFiManager::resetSettings()
-{
-  DEBUG_WM(F("settings invalidated"));
-  DEBUG_WM(F("THIS MAY CAUSE AP NOT TO START UP PROPERLY. YOU NEED TO COMMENT IT OUT AFTER ERASING THE DATA."));
-
-  WiFi.mode(WIFI_AP_STA); // cannot erase if not in STA mode !
-  WiFi.persistent(true);
-#if defined(ESP8266)
-  WiFi.disconnect(true);
-#else
-  WiFi.disconnect(true, true);
-#endif
-  WiFi.persistent(false);
-
-  //delay(200);
-}
 void AsyncWiFiManager::setTimeout(unsigned long seconds)
 {
   setConfigPortalTimeout(seconds);
@@ -890,6 +831,23 @@ void AsyncWiFiManager::setAPStaticIPConfig(IPAddress ip,
   _ap_static_ip = ip;
   _ap_static_gw = gw;
   _ap_static_sn = sn;
+}
+
+void AsyncWiFiManager::resetSettings()
+{
+  DEBUG_WM(F("settings invalidated"));
+  DEBUG_WM(F("THIS MAY CAUSE AP NOT TO START UP PROPERLY. YOU NEED TO COMMENT IT OUT AFTER ERASING THE DATA."));
+
+  WiFi.mode(WIFI_AP_STA); // cannot erase if not in STA mode !
+  WiFi.persistent(true);
+#if defined(ESP8266)
+  WiFi.disconnect(true);
+#else
+  WiFi.disconnect(true, true);
+#endif
+  WiFi.persistent(false);
+
+  //delay(200);
 }
 
 void AsyncWiFiManager::setSTAStaticIPConfig(IPAddress ip,
@@ -955,7 +913,6 @@ void AsyncWiFiManager::handleRoot(AsyncWebServerRequest *request)
 void AsyncWiFiManager::handleWifi(AsyncWebServerRequest *request, boolean scan)
 {
   shouldscan = true;
-  scannow = 0;
 
   DEBUG_WM(F("Handle wifi"));
   String page = getPageHeader("Luke Wi-Fi Setup");
@@ -1075,10 +1032,7 @@ void AsyncWiFiManager::handleWifi(AsyncWebServerRequest *request, boolean scan)
   // --- SECONDARY ACTION BUTTONS / FOOTER LINKS ---
   // Replaces the single HTTP_SCAN_LINK with a neat utility footer
   page += F("<div class='links'>");
-  page += F("<a href='/wifi'>Rescan</a> | ");
-  page += F("<a href='/0wifi'>Manual SSID</a> | ");
-  page += F("<a href='/i'>Device Info</a> | ");
-  page += F("<a href='/r' onclick='return confirm(\"Reboot device?\")'>Reset</a>");
+  page += F("<a href='/wifi'>Rescan</a>");
   page += F("</div>");
 
   page += FPSTR(HTTP_END);
@@ -1121,7 +1075,7 @@ void AsyncWiFiManager::handleWifiSave(AsyncWebServerRequest *request)
   page += F("</b></p>");
 
   page += F("<div id='spinner'></div>");
-  page += F("<div id='timer'>30</div>");
+  page += F("<div id='timer'>15</div>");
   page += F("<p id='status'>Testing connection...</p>");
 
   page += F("<div id='fallback'>");
@@ -1131,7 +1085,7 @@ void AsyncWiFiManager::handleWifiSave(AsyncWebServerRequest *request)
 
   page += F("<div id='controller-section' style='display:none;'>");
   page += F("<hr style='border:none; border-top:1px solid #444; margin:12px 0;'>");
-  page += F("<p style='margin:0 0 8px; font-size:13px; color:#ccc;'>If Luke connected successfully and your phone joined home Wi-Fi:</p>");
+  page += F("<p style='margin:0 0 8px; font-size:13px; color:#ccc;'>If Luke connected successfully, make sure your phone is on your Wi-Fi network, then open the controller:</p>");
   page += F("<a class='btn btn-primary' href='");
   page += redirectUrl;
   page += F("' target='_blank'>Open Luke Controller</a>");
@@ -1142,7 +1096,7 @@ void AsyncWiFiManager::handleWifiSave(AsyncWebServerRequest *request)
 
   // JavaScript Logic
   page += F("<script>");
-  page += F("let timeLeft = 30;");
+  page += F("let timeLeft = 15;");
   page += F("const targetUrl = '");
   page += redirectUrl;
   page += F("';");
@@ -1167,7 +1121,7 @@ void AsyncWiFiManager::handleWifiSave(AsyncWebServerRequest *request)
   page += F("        if (timerEl) timerEl.style.display = 'none';");
   page += F("        statusEl.innerHTML = \"<span class='err'>Incorrect Wi-Fi Password!</span>\";");
   page += F("        titleEl.innerText = 'Authentication Failed';");
-  page += F("        descEl.innerText = 'The password entered for ");
+  page += F("        descEl.innerText = 'The SSID or password entered for ");
   page += _ssid;
   page += F(" was incorrect. Please try again.';");
   page += F("        controllerSec.style.display = 'none';"); // Hide Controller Option on Wrong Password
@@ -1191,7 +1145,7 @@ void AsyncWiFiManager::handleWifiSave(AsyncWebServerRequest *request)
   page += F("    }).catch(() => {});");
   page += F("}, 2000);");
 
-  // 3. 20-Second Countdown Timer
+  // 3. 15-Second Countdown Timer
   page += F("let timerInterval = setInterval(() => {");
   page += F("  timeLeft--;");
   page += F("  if (timerEl) timerEl.innerText = timeLeft;");
@@ -1202,8 +1156,8 @@ void AsyncWiFiManager::handleWifiSave(AsyncWebServerRequest *request)
   page += F("    if (spinnerEl) spinnerEl.style.display = 'none';");
   page += F("    if (timerEl) timerEl.style.display = 'none';");
   page += F("    statusEl.innerText = 'Connection status unconfirmed.';");
-  page += F("    titleEl.innerText = 'Time Out / Status Unconfirmed';");
-  page += F("    descEl.innerText = 'If Luke connected, open the controller below. Otherwise, re-enter your password:';");
+  page += F("    titleEl.innerText = 'Timed Out';");
+  page += F("    descEl.innerText = 'If Luke couldn't connect, re-enter your Wi-Fi credentials:';");
   page += F("    controllerSec.style.display = 'block';"); // Show Controller Option on 20s Timeout
   page += F("    fallbackEl.style.display = 'block';");
   page += F("  }");
@@ -1216,111 +1170,6 @@ void AsyncWiFiManager::handleWifiSave(AsyncWebServerRequest *request)
   connect = true;
 }
 
-// handle the info page
-String AsyncWiFiManager::infoAsString()
-{
-  String page;
-  page += F("<dt>Chip ID</dt><dd>");
-#if defined(ESP8266)
-  page += ESP.getChipId();
-#else
-  page += getESP32ChipID();
-#endif
-  page += F("</dd>");
-  page += F("<dt>Flash Chip ID</dt><dd>");
-#if defined(ESP8266)
-  page += ESP.getFlashChipId();
-#else
-  page += F("N/A for ESP32");
-#endif
-  page += F("</dd>");
-  page += F("<dt>IDE Flash Size</dt><dd>");
-  page += ESP.getFlashChipSize();
-  page += F(" bytes</dd>");
-  page += F("<dt>Real Flash Size</dt><dd>");
-#if defined(ESP8266)
-  page += ESP.getFlashChipRealSize();
-#else
-  page += F("N/A for ESP32");
-#endif
-  page += F(" bytes</dd>");
-  page += F("<dt>Soft AP IP</dt><dd>");
-  page += WiFi.softAPIP().toString();
-  page += F("</dd>");
-  page += F("<dt>Soft AP MAC</dt><dd>");
-  page += WiFi.softAPmacAddress();
-  page += F("</dd>");
-  page += F("<dt>Station SSID</dt><dd>");
-  page += WiFi.SSID();
-  page += F("</dd>");
-  page += F("<dt>Station IP</dt><dd>");
-  page += WiFi.localIP().toString();
-  page += F("</dd>");
-  page += F("<dt>Station MAC</dt><dd>");
-  page += WiFi.macAddress();
-  page += F("</dd>");
-  page += F("</dl>");
-  return page;
-}
-
-void AsyncWiFiManager::handleInfo(AsyncWebServerRequest *request)
-{
-  DEBUG_WM(F("Info"));
-  String page = getPageHeader("Luke Wi-Fi Setup");
-  page.replace("{v}", "Info");
-  page += FPSTR(HTTP_SCRIPT);
-  page += FPSTR(HTTP_STYLE);
-  page += _customHeadElement;
-  if (connect == true)
-  {
-    page += F("<meta http-equiv=\"refresh\" content=\"5; url=/i\">");
-  }
-  page += FPSTR(HTTP_HEAD_END);
-  page += F("<dl>");
-  if (connect == true)
-  {
-    page += F("<dt>Trying to connect</dt><dd>");
-    page += wifiStatus;
-    page += F("</dd>");
-  }
-  page += pager;
-  page += F("<div class='links'>");
-  page += F("<a href='/wifi'>Rescan</a> | ");
-  page += F("<a href='/0wifi'>Manual SSID</a> | ");
-  page += F("<a href='/i'>Device Info</a> | ");
-  page += F("<a href='/r' onclick='return confirm(\"Reboot device?\")'>Reset</a>");
-  page += F("</div>");
-  page += FPSTR(HTTP_END);
-
-  request->send(200, "text/html", page);
-
-  DEBUG_WM(F("Sent info page"));
-}
-
-// handle the reset page
-void AsyncWiFiManager::handleReset(AsyncWebServerRequest *request)
-{
-  DEBUG_WM(F("Reset"));
-
-  String page = FPSTR(WFM_HTTP_HEAD);
-  page.replace("{v}", "Info");
-  page += FPSTR(HTTP_SCRIPT);
-  page += FPSTR(HTTP_STYLE);
-  page += _customHeadElement;
-  page += FPSTR(HTTP_HEAD_END);
-  page += F("Module will reset in a few seconds");
-  page += FPSTR(HTTP_END);
-  request->send(200, "text/html", page);
-
-  DEBUG_WM(F("Sent reset page"));
-  delay(5000);
-#if defined(ESP8266)
-  ESP.reset();
-#else
-  ESP.restart();
-#endif
-  delay(2000);
-}
 
 void AsyncWiFiManager::handleNotFound(AsyncWebServerRequest *request)
 {
