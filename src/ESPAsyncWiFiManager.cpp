@@ -113,6 +113,9 @@ void AsyncWiFiManager::setupConfigPortal()
 
   DEBUG_WM(F(""));
   _configPortalStart = millis();
+  // Scan once, before a phone is connected. Scanning later drops the phone.
+  shouldscan = true;
+  scanModal();
 
   DEBUG_WM(F("Configuring access point... "));
   DEBUG_WM(_apName);
@@ -191,16 +194,19 @@ void AsyncWiFiManager::setupConfigPortal()
   server->on("/gen_204", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send(204);
   }).setFilter(ON_AP_FILTER);
+  // Windows probes only. Android's generate_204 stays a plain 204 above:
+  // answering that with the setup page traps the phone and it never
+  // reaches https://lukerobotarm.com after Connect.
   server->on("/connecttest.txt", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->redirect("http://192.168.4.1/");
+    request->redirect((String("http://") + WiFi.softAPIP().toString() + "/").c_str());
   }).setFilter(ON_AP_FILTER);
 
   server->on("/ncsi.txt", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->redirect("http://192.168.4.1/");
+    request->redirect((String("http://") + WiFi.softAPIP().toString() + "/").c_str());
   }).setFilter(ON_AP_FILTER);
 
   server->on("/redirect", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->redirect("http://192.168.4.1/");
+    request->redirect((String("http://") + WiFi.softAPIP().toString() + "/").c_str());
   }).setFilter(ON_AP_FILTER);
   server->onNotFound(std::bind(&AsyncWiFiManager::handleNotFound, this, std::placeholders::_1));
   server->begin(); // web server start
@@ -309,12 +315,17 @@ boolean AsyncWiFiManager::autoConnect(char const *apName,
 String AsyncWiFiManager::networkListAsString()
 {
   String pager;
-  // display networks in page
-  for (int i = 0; i < wifiSSIDCount; i++)
+  int shown = 0;
+  // Strongest first. Hide our own setup network and keep at most five.
+  for (int i = 0; i < wifiSSIDCount && shown < 5; i++)
   {
     if (wifiSSIDs[i].duplicate == true)
     {
       continue; // skip dups
+    }
+    if (wifiSSIDs[i].SSID.length() == 0 || wifiSSIDs[i].SSID.startsWith("Luke-"))
+    {
+      continue;
     }
     unsigned int quality = getRSSIasQuality(wifiSSIDs[i].RSSI);
 
@@ -339,6 +350,7 @@ String AsyncWiFiManager::networkListAsString()
         item.replace("{i}", "");
       }
       pager += item;
+      shown++;
     }
   }
   return pager;
@@ -600,30 +612,7 @@ boolean AsyncWiFiManager::startConfigPortal(char const *apName, char const *apPa
 #ifndef USE_EADNS
     dnsServer->processNextRequest();
 #endif
-    //
-    //  we should do a scan every so often here and
-    //  try to reconnect to AP while we are at it
-    //
-    if (scannow == 0 || millis() - scannow >= 10000)
-    {
-      DEBUG_WM(F("About to scan()"));
-      shouldscan = true; // since we are modal, we can scan every time
-#if defined(ESP8266)
-      // we might still be connecting, so that has to stop for scanning
-      ETS_UART_INTR_DISABLE();
-      wifi_station_disconnect();
-      ETS_UART_INTR_ENABLE();
-#else
-      WiFi.disconnect(false);
-#endif
-      scanModal();
-      if (_tryConnectDuringConfigPortal)
-      {
-        WiFi.begin(); // try to reconnect to AP
-        connectedDuringConfigPortal = true;
-      }
-      scannow = millis();
-    }
+    // Do not scan or disconnect while a phone is on the setup network.
 
     // attempts to reconnect were successful
     if (WiFi.status() == WL_CONNECTED)
@@ -916,6 +905,11 @@ void AsyncWiFiManager::handleWifi(AsyncWebServerRequest *request, boolean scan)
   shouldscan = true;
 
   DEBUG_WM(F("Handle wifi"));
+  if (strcmp(request->url().c_str(), "/wifi") == 0)
+  {
+    shouldscan = true;
+    scanModal();
+  }
   String page = getPageHeader("Setup your Luke Robot Wi-Fi");
   page.replace("{v}", "Setup your Luke Robot Wi-Fi");
   page += F("<p style='text-align:left;font-size:15px;color:#ddd;margin:0 0 8px;'>Tap your Wi-Fi and enter the password. We'll open the Luke control page.</p>");
@@ -935,7 +929,7 @@ void AsyncWiFiManager::handleWifi(AsyncWebServerRequest *request, boolean scan)
       // display scanned networks list at the top
       String pager = networkListAsString();
       page += pager;
-      page += "<br/>";
+      page += "<br/><br/>";
     }
   }
   wifiSSIDscan = true;
@@ -1207,7 +1201,7 @@ boolean AsyncWiFiManager::captivePortal(AsyncWebServerRequest *request)
   {
     DEBUG_WM(F("Request redirected to captive portal"));
     AsyncWebServerResponse *response = request->beginResponse(302, "text/plain", "");
-    response->addHeader("Location", String("http://") + toStringIp(request->client()->localIP()));
+    response->addHeader("Location", String("http://") + WiFi.softAPIP().toString() + "/");
     response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     response->addHeader("Pragma", "no-cache");
     response->addHeader("Expires", "-1");

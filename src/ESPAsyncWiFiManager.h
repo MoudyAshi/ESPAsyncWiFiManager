@@ -72,7 +72,7 @@ const char HTTP_STYLE[] PROGMEM =
 ".q{float:right;width:64px;text-align:right;color:#ccc;}"
 ".l{background:url(\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAALVBMVEX///8EBwfBwsLw8PAzNjaCg4NTVVUjJiZDRUUUFxdiZGSho6OSk5Pg4eFydHTCjaf3AAAAZElEQVQ4je2NSw7AIAhEBamKn97/uMXEGBvozkWb9C2Zx4xzWykBhFAeYp9gkLyZE0zIMno9n4g19hmdY39scwqVkOXaxph0ZCXQcqxSpgQpONa59wkRDOL93eAXvimwlbPbwwVAegLS1HGfZAAAAABJRU5ErkJggg==\") no-repeat left center;background-size:1em;filter:invert(1);}"
 ".wrap{text-align:left;display:block;min-width:260px;max-width:440px;width:92%;margin:8px auto;background:#242424;border:1px solid #333;border-radius:12px;padding:.85rem 1rem 1rem;}"
-".links{margin-top:20px;text-align:center;font-size:14px;opacity:.9;}"
+".links{margin-top:8px;text-align:center;font-size:14px;opacity:.9;}"
 ".links a{margin:0 8px;}"
 "dt{font-weight:600;color:var(--accent);margin-top:.55rem;}"
 "dd{margin:0 0 .35rem 0;color:#ddd;}"
