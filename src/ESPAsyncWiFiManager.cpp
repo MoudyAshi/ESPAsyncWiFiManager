@@ -170,9 +170,6 @@ void AsyncWiFiManager::setupConfigPortal()
   server->on("/wifisave",
              std::bind(&AsyncWiFiManager::handleWifiSave, this, std::placeholders::_1))
       .setFilter(ON_AP_FILTER);
-  server->on("/fwlink",
-             std::bind(&AsyncWiFiManager::handleWifi, this, std::placeholders::_1, true))
-      .setFilter(ON_AP_FILTER); 
   server->on("/status", HTTP_GET, [](AsyncWebServerRequest *request)
   {
     if (_wifiConnectStatus == 1)
@@ -182,32 +179,23 @@ void AsyncWiFiManager::setupConfigPortal()
     else
       request->send(200, "text/plain", "CONNECTING");
   }).setFilter(ON_AP_FILTER);
-  server->on("/hotspot-detect.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(200, "text/html", "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>");
-  }).setFilter(ON_AP_FILTER);
-  server->on("/canonical.html", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(200, "text/html", "<HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>");
-  }).setFilter(ON_AP_FILTER);
-  server->on("/generate_204", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(204);
-  }).setFilter(ON_AP_FILTER);
-  server->on("/gen_204", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(204);
-  }).setFilter(ON_AP_FILTER);
-  // Windows probes only. Android's generate_204 stays a plain 204 above:
-  // answering that with the setup page traps the phone and it never
-  // reaches https://lukerobotarm.com after Connect.
-  server->on("/connecttest.txt", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->redirect((String("http://") + WiFi.softAPIP().toString() + "/").c_str());
-  }).setFilter(ON_AP_FILTER);
-
-  server->on("/ncsi.txt", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->redirect((String("http://") + WiFi.softAPIP().toString() + "/").c_str());
-  }).setFilter(ON_AP_FILTER);
-
-  server->on("/redirect", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->redirect((String("http://") + WiFi.softAPIP().toString() + "/").c_str());
-  }).setFilter(ON_AP_FILTER);
+  // A 204 or the word Success tells the phone the network is fine, so it
+  // shows "no internet" and never opens the setup page. Send it there.
+  // DNS is stopped as soon as Wi-Fi connects, so this does not keep
+  // hijacking https://lukerobotarm.com afterwards.
+  const char *probes[] = {
+      "/hotspot-detect.html", "/canonical.html", "/generate_204", "/generate204",
+      "/gen_204", "/connecttest.txt", "/ncsi.txt", "/redirect", "/fwlink"};
+  for (const char *probe : probes)
+  {
+    server->on(probe, HTTP_ANY, [](AsyncWebServerRequest *request) {
+      const String url = String("http://") + WiFi.softAPIP().toString() + "/";
+      AsyncWebServerResponse *response = request->beginResponse(302, "text/plain", "redirect to captive portal");
+      response->addHeader("Location", url);
+      response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      request->send(response);
+    });
+  }
   server->onNotFound(std::bind(&AsyncWiFiManager::handleNotFound, this, std::placeholders::_1));
   server->begin(); // web server start
   DEBUG_WM(F("HTTP server started"));
@@ -644,6 +632,9 @@ boolean AsyncWiFiManager::startConfigPortal(char const *apName, char const *apPa
         WiFi.persistent(false);
 
         DEBUG_WM(F("Wi-Fi Connected! Holding AP briefly for browser polling..."));
+        // Stop name hijacking now. The phone can still reach 4.3.2.1 for
+        // /status, and can resolve lukerobotarm.com once it leaves this network.
+        dnsServer->stop();
         delay(2500); // Gives browser time to poll /status and receive "SUCCESS"
         WiFi.softAPdisconnect(true);
         WiFi.mode(WIFI_STA);
@@ -910,8 +901,8 @@ void AsyncWiFiManager::handleWifi(AsyncWebServerRequest *request, boolean scan)
     shouldscan = true;
     scanModal();
   }
-  String page = getPageHeader("Setup your Luke Robot Wi-Fi");
-  page.replace("{v}", "Setup your Luke Robot Wi-Fi");
+  String page = getPageHeader("Setup your Luke Wi-Fi");
+  page.replace("{v}", "Setup your Luke Wi-Fi");
   page += F("<p style='text-align:left;font-size:15px;color:#ddd;margin:0 0 8px;'>Tap your Wi-Fi and enter the password. We'll open the Luke control page.</p>");
 
   if (scan)
@@ -1307,7 +1298,7 @@ String AsyncWiFiManager::getPageHeader(const String& pageTitle)
 
   // Top Title Bar displaying Luke Wi-Fi and Unique Device ID
   page += F("<div class='c' style='margin-bottom:12px;'>");
-  page += F("<h1>Setup your Luke Robot Wi-Fi</h1>");
+  page += F("<h1 style='font-size:1.2rem;margin:0 0 8px;'>Setup your Luke Wi-Fi</h1>");
   page += F("<div style='font-size:14px; opacity:.75; font-weight:600; color:#ccc;'>ID: ");
   page += (_apName != NULL) ? _apName : "Luke-Device";
   page += F("</div></div>");
