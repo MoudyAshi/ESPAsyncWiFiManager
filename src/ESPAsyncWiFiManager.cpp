@@ -916,12 +916,9 @@ void AsyncWiFiManager::handleWifi(AsyncWebServerRequest *request, boolean scan)
   shouldscan = true;
 
   DEBUG_WM(F("Handle wifi"));
-  String page = getPageHeader("Luke Wi-Fi Setup");
-  page.replace("{v}", "Luke Wi-Fi Setup");
-  page += FPSTR(HTTP_SCRIPT);
-  page += FPSTR(HTTP_STYLE);
-  page += _customHeadElement;
-  page += FPSTR(HTTP_HEAD_END);
+  String page = getPageHeader("Setup your Luke Robot Wi-Fi");
+  page.replace("{v}", "Setup your Luke Robot Wi-Fi");
+  page += F("<p style='text-align:left;font-size:15px;color:#ddd;margin:0 0 8px;'>Tap your Wi-Fi and enter the password. We'll open the Luke control page.</p>");
 
   if (scan)
   {
@@ -1211,6 +1208,9 @@ boolean AsyncWiFiManager::captivePortal(AsyncWebServerRequest *request)
     DEBUG_WM(F("Request redirected to captive portal"));
     AsyncWebServerResponse *response = request->beginResponse(302, "text/plain", "");
     response->addHeader("Location", String("http://") + toStringIp(request->client()->localIP()));
+    response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    response->addHeader("Pragma", "no-cache");
+    response->addHeader("Expires", "-1");
     request->send(response);
     return true;
   }
@@ -1313,7 +1313,7 @@ String AsyncWiFiManager::getPageHeader(const String& pageTitle)
 
   // Top Title Bar displaying Luke Wi-Fi and Unique Device ID
   page += F("<div class='c' style='margin-bottom:12px;'>");
-  page += F("<h1>Luke Wi-Fi</h1>");
+  page += F("<h1>Setup your Luke Robot Wi-Fi</h1>");
   page += F("<div style='font-size:14px; opacity:.75; font-weight:600; color:#ccc;'>ID: ");
   page += (_apName != NULL) ? _apName : "Luke-Device";
   page += F("</div></div>");
